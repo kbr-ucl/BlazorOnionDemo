@@ -1,17 +1,31 @@
 ﻿using BlazorOnionDemo.Application.Repositories;
 using BlazorOnionDemo.Domain.Entity;
+using BlazorOnionDemo.Infrastructure.Database;
+using Microsoft.EntityFrameworkCore;
 
 namespace BlazorOnionDemo.Infrastructure.Repositories;
 
 public class AuthorRepository : IAuthorRepository
 {
-    Task<Author> IAuthorRepository.Load(int id)
+    private readonly OrmContext _db;
+
+    public AuthorRepository(OrmContext db)
     {
-        throw new NotImplementedException();
+        _db = db;
+    }
+    async Task IAuthorRepository.AddAsync(Author author)
+    {
+        _db.Authors.Add(author);
+        await _db.SaveChangesAsync();
     }
 
-    Task IAuthorRepository.Save()
+    async Task<Author> IAuthorRepository.LoadAsync(int id)
     {
-        throw new NotImplementedException();
+        return await _db.Authors.Include(a => a.Books).FirstAsync(a => a.Id == id);
+    }
+
+    async Task<int> IAuthorRepository.SaveAsync()
+    {
+        return await _db.SaveChangesAsync();
     }
 }

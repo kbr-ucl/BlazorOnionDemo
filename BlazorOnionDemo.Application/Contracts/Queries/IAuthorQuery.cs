@@ -2,8 +2,8 @@
 
 public interface IAuthorQuery
 {
-    Task<AuthorDto> GetById(int id);
-    Task<List<AuthorDto>> GetAll();
+    Task<AuthorDto> GetByIdAsync(int id);
+    Task<List<AuthorDto>> GetAllAsync();
 }
 
 public class AuthorDto

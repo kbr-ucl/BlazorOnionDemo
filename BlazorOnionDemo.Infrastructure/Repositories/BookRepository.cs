@@ -5,12 +5,17 @@ namespace BlazorOnionDemo.Infrastructure.Repositories;
 
 public class BookRepository : IBookRepository
 {
-    Task<Book> IBookRepository.Load(int id)
+    async Task IBookRepository.AddAsync(Book author)
     {
         throw new NotImplementedException();
     }
 
-    Task IBookRepository.Save()
+    async Task<Book> IBookRepository.LoadAsync(int id)
+    {
+        throw new NotImplementedException();
+    }
+
+    async Task<int> IBookRepository.SaveAsync()
     {
         throw new NotImplementedException();
     }

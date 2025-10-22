@@ -1,0 +1,65 @@
+﻿@page "/authors/details"
+@using BlazorOnionDemo.Application.Contracts.Queries
+@using Microsoft.AspNetCore.Components.QuickGrid
+
+@inject IAuthorQuery AuthorQuery
+@inject NavigationManager NavigationManager
+
+<PageTitle>Details</PageTitle>
+
+<h1>Details</h1>
+
+<div>
+    <h2>Author</h2>
+    <hr/>
+    @if (author is null)
+    {
+        <p>
+            <em>Loading...</em>
+        </p>
+    }
+    else
+    {
+        <dl class="row">
+            <dt class="col-sm-2">Id</dt>
+            <dd class="col-sm-10">@author.Id</dd>
+            <dt class="col-sm-2">Name</dt>
+            <dd class="col-sm-10">@author.Name</dd>
+        </dl>
+        <div>
+            <a href="@($"/authors/addBook?id={author.Id}")">Add book</a> |
+            <a href="@("/authors")">Back to List</a>
+        </div>
+    }
+
+    <h3>Books</h3>
+
+    <div>
+        <QuickGrid Class="table" Items="Books" Pagination="pagination">
+            <PropertyColumn Property="book => book.Id" Sortable="true"/>
+            <PropertyColumn Property="book => book.Title" Sortable="true"/>
+            <PropertyColumn Property="book => book.Description" Title="Book count"/>
+        </QuickGrid>
+    </div>
+</div>
+
+<Paginator State="pagination"/>
+
+@code {
+    private AuthorDto? author;
+    private readonly PaginationState pagination = new() { ItemsPerPage = 5 };
+    private IQueryable<AuthorBookDto> Books => author?.Books.AsQueryable() ?? Enumerable.Empty<AuthorBookDto>().AsQueryable();
+
+    [SupplyParameterFromQuery] private int Id { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        author = await AuthorQuery.GetByIdAsync(Id);
+
+        if (author is null)
+        {
+            NavigationManager.NavigateTo("notfound");
+        }
+    }
+
+}

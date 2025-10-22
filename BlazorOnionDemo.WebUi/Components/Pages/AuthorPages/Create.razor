@@ -1,0 +1,40 @@
+﻿@page "/authors/create"
+@using BlazorOnionDemo.Application.Contracts.Commands
+@inject IAuthorCommand Command
+@inject NavigationManager NavigationManager
+
+<PageTitle>Create</PageTitle>
+
+<h1>Create</h1>
+
+<h2>Author</h2>
+<hr/>
+<div class="row">
+    <div class="col-md-4">
+        <EditForm method="post" Model="Author" OnValidSubmit="AddAuthor" FormName="create" Enhance>
+            <DataAnnotationsValidator/>
+            <ValidationSummary class="text-danger" role="alert"/>
+            <div class="mb-3">
+                <label for="title" class="form-label">Name:</label>
+                <InputText id="title" @bind-Value="Author.Name" class="form-control"/>
+                <ValidationMessage For="() => Author.Name" class="text-danger"/>
+            </div>
+            <button type="submit" class="btn btn-primary">Create</button>
+        </EditForm>
+    </div>
+</div>
+
+<div>
+    <a href="/authors">Back to List</a>
+</div>
+
+@code {
+    [SupplyParameterFromForm] private AuthorCreateCommandDto Author { get; set; } = new();
+
+    private async Task AddAuthor()
+    {
+        await Command.CreateAsync(Author);
+        NavigationManager.NavigateTo("/authors");
+    }
+
+}

@@ -1,0 +1,39 @@
+﻿@page "/authors"
+@using BlazorOnionDemo.Application.Contracts.Queries
+@using Microsoft.AspNetCore.Components.QuickGrid
+
+@inject IAuthorQuery AuthorQuery
+
+<PageTitle>Index</PageTitle>
+
+<h1>Index</h1>
+
+<p>
+    <a href="authors/create">Create New</a>
+</p>
+
+<div>
+    <QuickGrid Class="table" Items="Authors" Pagination="pagination">
+        <PropertyColumn Property="author => author.Id" Sortable="true"/>
+        <PropertyColumn Property="author => author.Name" Sortable="true"/>
+        <PropertyColumn Property="author => author.Books.Count" Title="Book count"/>
+
+        <TemplateColumn Context="author">
+            <a href="@($"authors/details?id={author.Id}")">Details</a>
+        </TemplateColumn>
+    </QuickGrid>
+</div>
+
+<Paginator State="pagination"/>
+
+@code {
+
+    private readonly PaginationState pagination = new() { ItemsPerPage = 5 };
+    private IQueryable<AuthorDto> Authors; // = default!; /* => context.Movie.Where(m => m.Title!.Contains(titleFilter)); */
+
+    protected override async Task OnInitializedAsync()
+    {
+        Authors = (await AuthorQuery.GetAllAsync()).AsQueryable();
+    }
+
+}

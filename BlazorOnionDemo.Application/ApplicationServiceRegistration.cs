@@ -11,7 +11,6 @@ public static class ApplicationServiceRegistration
         services.AddScoped<IAuthorCommand, AuthorCommand>();
         services.AddScoped<IBookCommand, BookCommand>();
 
-
         return services;
     }
 }

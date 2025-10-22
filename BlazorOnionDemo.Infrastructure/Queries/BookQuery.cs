@@ -4,12 +4,12 @@ namespace BlazorOnionDemo.Infrastructure.Queries;
 
 public class BookQuery : IBookQuery
 {
-    Task<List<BookDto>> IBookQuery.GetAll()
+    async Task<List<BookDto>> IBookQuery.GetAllAsync()
     {
         throw new NotImplementedException();
     }
 
-    Task<BookDto> IBookQuery.GetById(int id)
+    async Task<BookDto> IBookQuery.GetByIdAsync(int id)
     {
         throw new NotImplementedException();
     }

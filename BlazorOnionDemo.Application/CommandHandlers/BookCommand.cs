@@ -4,7 +4,7 @@ namespace BlazorOnionDemo.Application.CommandHandlers;
 
 public class BookCommand : IBookCommand
 {
-    Task IBookCommand.Create(BookCreateCommandDto dto)
+    async Task IBookCommand.CreateAsync(BookCreateCommandDto dto)
     {
         throw new NotImplementedException();
     }

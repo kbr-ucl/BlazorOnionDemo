@@ -1,0 +1,49 @@
+﻿@page "/authors/addBook"
+@using BlazorOnionDemo.Application.Contracts.Commands
+@inject IAuthorCommand Command
+@inject NavigationManager NavigationManager
+
+<PageTitle>Add book</PageTitle>
+
+<h1>Add book</h1>
+
+<h2>Book</h2>
+<hr/>
+
+<div class="row">
+    <div class="col-md-4">
+        <EditForm method="post" Model="Book" OnValidSubmit="Add" FormName="create" Enhance>
+            <DataAnnotationsValidator/>
+            <ValidationSummary class="text-danger" role="alert"/>
+            <div class="mb-3">
+                <label for="title" class="form-label">Title:</label>
+                <InputText id="title" @bind-Value="Book.Title" class="form-control"/>
+                <ValidationMessage For="() => Book.Title" class="text-danger"/>
+            </div>
+            <div class="mb-3">
+                <label for="title" class="form-label">Description:</label>
+                <InputText id="title" @bind-Value="Book.Description" class="form-control"/>
+                <ValidationMessage For="() => Book.Description" class="text-danger"/>
+            </div>
+            <button type="submit" class="btn btn-primary">Create</button>
+        </EditForm>
+    </div>
+</div>
+
+<div>
+    <a href="@($"authors/details?id={Id}")">Back to List</a>
+</div>
+
+@code {
+    [SupplyParameterFromForm] private BookCreateCommandDto Book { get; set; } = new();
+
+    [SupplyParameterFromQuery] private int Id { get; set; }
+
+    private async Task Add()
+    {
+        var command = new AddBookToAuthorCommandDto { AuthorId = Id, Book = Book };
+        await Command.AddBookToAuthorAsync(command);
+        NavigationManager.NavigateTo($"authors/details?id={Id}");
+    }
+
+}

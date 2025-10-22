@@ -4,6 +4,7 @@ namespace BlazorOnionDemo.Application.Repositories;
 
 public interface IAuthorRepository
 {
-    Task<Author> Load(int id);
-    Task Save();
+    Task<Author> LoadAsync(int id);
+    Task<int> SaveAsync();
+    Task AddAsync(Author author);
 }

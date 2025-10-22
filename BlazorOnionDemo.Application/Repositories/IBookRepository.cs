@@ -4,6 +4,7 @@ namespace BlazorOnionDemo.Application.Repositories;
 
 public interface IBookRepository
 {
-    Task<Book> Load(int id);
-    Task Save();
+    Task<Book> LoadAsync(int id);
+    Task<int> SaveAsync();
+    Task AddAsync(Book author);
 }

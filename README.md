@@ -4,7 +4,7 @@
 
 Formålet med denne demo er at vise hvorledes elemeterne i arkitekturen "spiller sammen". 
 
-Formålet er IKKE at vise korrekt implementering af de enkelte lag. Eksempelvis implementeres domain entities som en "Anemic domain model" Ligeledes er alle implementeringer af interfaces "tomme" (de kaster blot en exception) 
+Formålet er IKKE at vise korrekt implementering af de enkelte lag. Eksempelvis implementeres domain entities som en "Anemic domain model" Ligeledes er alle ikke strengt nødvendige implementeringer af interfaces "tomme" (de kaster blot en exception) 
 
 Fokus er:
 
@@ -12,6 +12,7 @@ Fokus er:
 - Opsætning af IoC containeren via Blazor
 - Opsætning af Entity Framework via Blazor
 - Database migration og database update.
+- Systemtest - der er "hul" fra Blazor til database
 
 Hertil oprettes det nødvendige kodeskelet for at kunne opfylde formålet. 
 
@@ -189,6 +190,8 @@ C:\Demo\BlazorOnionDemo>
 
 
 
+------------------------
+
 ## Oprettelse af demo kode
 
 ### Domain model
@@ -225,19 +228,25 @@ namespace BlazorOnionDemo.Application.Contracts.Commands;
 
 public interface IAuthorCommand
 {
-    Task Create(AuthorCreateCommandDto dto);
-    Task AddBookToAuthor(AddBookToAuthorCommandDto dto);
+    Task CreateAsync(AuthorCreateCommandDto dto);
+    Task AddBookToAuthorAsync(AddBookToAuthorCommandDto dto);
 }
 
 public class AddBookToAuthorCommandDto
 {
     public int AuthorId { get; set; }
-    public int BookId { get; set; }
+    public BookCreateCommandDto Book { get; set; }
 }
 
 public class AuthorCreateCommandDto
 {
     public string Name { get; set; }
+}
+
+public class BookCreateCommandDto
+{
+    public string Title { get; set; }
+    public string Description { get; set; }
 }
 ```
 
@@ -250,13 +259,7 @@ namespace BlazorOnionDemo.Application.Contracts.Commands;
 
 public interface IBookCommand
 {
-    Task Create(BookCreateCommandDto dto);
-}
-
-public class BookCreateCommandDto
-{
-    public string Title { get; set; }
-    public string Description { get; set; }
+    Task CreateAsync(BookCreateCommandDto dto);
 }
 ```
 
@@ -269,8 +272,8 @@ namespace BlazorOnionDemo.Application.Contracts.Queries;
 
 public interface IAuthorQuery
 {
-    Task<AuthorDto> GetById(int id);
-    Task<List<AuthorDto>> GetAll();
+    Task<AuthorDto> GetByIdAsync(int id);
+    Task<List<AuthorDto>> GetAllAsync();
 }
 
 public class AuthorDto
@@ -297,8 +300,8 @@ namespace BlazorOnionDemo.Application.Contracts.Queries;
 
 public interface IBookQuery
 {
-    Task<BookDto> GetById(int id);
-    Task<List<BookDto>> GetAll();
+    Task<BookDto> GetByIdAsync(int id);
+    Task<List<BookDto>> GetAllAsync();
 }
 
 public class BookDto
@@ -306,7 +309,13 @@ public class BookDto
     public int Id { get; set; }
     public string Title { get; set; }
     public string Description { get; set; }
-    public AuthorDto Author { get; set; }
+    public BookAuthorDto Author { get; set; }
+}
+
+public class BookAuthorDto
+{
+    public int Id { get; set; }
+    public string Name { get; set; }    
 }
 ```
 
@@ -321,8 +330,9 @@ namespace BlazorOnionDemo.Application.Repositories;
 
 public interface IAuthorRepository
 {
-    Task<Author> Load(int id);
-    Task Save();
+    Task<Author> LoadAsync(int id);
+    Task<int> SaveAsync();
+    Task AddAsync(Author author);
 }
 ```
 
@@ -337,8 +347,9 @@ namespace BlazorOnionDemo.Application.Repositories;
 
 public interface IBookRepository
 {
-    Task<Book> Load(int id);
-    Task Save();
+    Task<Book> LoadAsync(int id);
+    Task<int> SaveAsync();
+    Task AddAsync(Book author);
 }
 ```
 
@@ -350,19 +361,41 @@ public interface IBookRepository
 
 ```c#
 using BlazorOnionDemo.Application.Contracts.Commands;
+using BlazorOnionDemo.Application.Repositories;
+using BlazorOnionDemo.Domain.Entity;
 
 namespace BlazorOnionDemo.Application.CommandHandlers;
 
 public class AuthorCommand : IAuthorCommand
 {
-    Task IAuthorCommand.AddBookToAuthor(AddBookToAuthorCommandDto dto)
+    private readonly IAuthorRepository _repository;
+
+    public AuthorCommand(IAuthorRepository repository)
     {
-        throw new NotImplementedException();
+        _repository = repository;
+    }
+    async Task IAuthorCommand.AddBookToAuthorAsync(AddBookToAuthorCommandDto dto)
+    {
+        var author = await _repository.LoadAsync(dto.AuthorId);
+        if (author == null)
+        {
+            throw new Exception("Author not found");
+        }
+
+        var book = new Book
+        {
+            Title = dto.Book.Title,
+            Description = dto.Book.Description
+        };
+        author.Books.Add(book);
+        await _repository.SaveAsync();
+
     }
 
-    Task IAuthorCommand.Create(AuthorCreateCommandDto dto)
+    async Task IAuthorCommand.CreateAsync(AuthorCreateCommandDto dto)
     {
-        throw new NotImplementedException();
+        var author = new Author { Name = dto.Name };
+        await _repository.AddAsync(author);
     }
 }
 ```
@@ -378,7 +411,7 @@ namespace BlazorOnionDemo.Application.CommandHandlers;
 
 public class BookCommand : IBookCommand
 {
-    Task IBookCommand.Create(BookCreateCommandDto dto)
+    async Task IBookCommand.CreateAsync(BookCreateCommandDto dto)
     {
         throw new NotImplementedException();
     }
@@ -398,19 +431,33 @@ public class BookCommand : IBookCommand
 ```c#
 using BlazorOnionDemo.Application.Repositories;
 using BlazorOnionDemo.Domain.Entity;
+using BlazorOnionDemo.Infrastructure.Database;
+using Microsoft.EntityFrameworkCore;
 
 namespace BlazorOnionDemo.Infrastructure.Repositories;
 
 public class AuthorRepository : IAuthorRepository
 {
-    Task<Author> IAuthorRepository.Load(int id)
+    private readonly OrmContext _db;
+
+    public AuthorRepository(OrmContext db)
     {
-        throw new NotImplementedException();
+        _db = db;
+    }
+    async Task IAuthorRepository.AddAsync(Author author)
+    {
+        _db.Authors.Add(author);
+        await _db.SaveChangesAsync();
     }
 
-    Task IAuthorRepository.Save()
+    async Task<Author> IAuthorRepository.LoadAsync(int id)
     {
-        throw new NotImplementedException();
+        return await _db.Authors.Include(a => a.Books).FirstAsync(a => a.Id == id);
+    }
+
+    async Task<int> IAuthorRepository.SaveAsync()
+    {
+        return await _db.SaveChangesAsync();
     }
 }
 ```
@@ -427,12 +474,17 @@ namespace BlazorOnionDemo.Infrastructure.Repositories;
 
 public class BookRepository : IBookRepository
 {
-    Task<Book> IBookRepository.Load(int id)
+    async Task IBookRepository.AddAsync(Book author)
     {
         throw new NotImplementedException();
     }
 
-    Task IBookRepository.Save()
+    async Task<Book> IBookRepository.LoadAsync(int id)
+    {
+        throw new NotImplementedException();
+    }
+
+    async Task<int> IBookRepository.SaveAsync()
     {
         throw new NotImplementedException();
     }
@@ -447,19 +499,60 @@ public class BookRepository : IBookRepository
 
 ```c#
 using BlazorOnionDemo.Application.Contracts.Queries;
+using BlazorOnionDemo.Infrastructure.Database;
+using Microsoft.EntityFrameworkCore;
 
 namespace BlazorOnionDemo.Infrastructure.Queries;
 
 public class AuthorQuery : IAuthorQuery
 {
-    Task<List<AuthorDto>> IAuthorQuery.GetAll()
+    private readonly OrmContext _db;
+
+    public AuthorQuery(OrmContext db)
     {
-        throw new NotImplementedException();
+        _db = db;
     }
 
-    Task<AuthorDto> IAuthorQuery.GetById(int id)
+    async Task<List<AuthorDto>> IAuthorQuery.GetAllAsync()
     {
-        throw new NotImplementedException();
+        return await _db.Authors
+            .AsNoTracking()
+            .Select(a => new AuthorDto
+            {
+                Id = a.Id,
+                Name = a.Name,
+                Books = a.Books
+                    .Select(b => new AuthorBookDto
+                    {
+                        Id = b.Id,
+                        Title = b.Title,
+                        Description = b.Description
+                    })
+                    .ToList()
+            })
+            .ToListAsync();
+    }
+
+
+    async Task<AuthorDto> IAuthorQuery.GetByIdAsync(int id)
+    {
+        return await _db.Authors
+            .AsNoTracking()
+            .Where(a => a.Id == id)
+            .Select(a => new AuthorDto
+            {
+                Id = a.Id,
+                Name = a.Name,
+                Books = a.Books
+                    .Select(b => new AuthorBookDto
+                    {
+                        Id = b.Id,
+                        Title = b.Title,
+                        Description = b.Description
+                    })
+                    .ToList()
+            })
+            .SingleAsync();
     }
 }
 ```
@@ -475,12 +568,12 @@ namespace BlazorOnionDemo.Infrastructure.Queries;
 
 public class BookQuery : IBookQuery
 {
-    Task<List<BookDto>> IBookQuery.GetAll()
+    async Task<List<BookDto>> IBookQuery.GetAllAsync()
     {
         throw new NotImplementedException();
     }
 
-    Task<BookDto> IBookQuery.GetById(int id)
+    async Task<BookDto> IBookQuery.GetByIdAsync(int id)
     {
         throw new NotImplementedException();
     }
@@ -512,6 +605,8 @@ public class OrmContext : DbContext
 
 
 
+------------------
+
 # Integration af lag
 
 Vi er nu klare til at implementere:
@@ -527,13 +622,6 @@ Vi er nu klare til at implementere:
 For at holde IoC opsætningen fokuseret tilføjes en hjælpeklasse i hver lag
 
 ### Application layer
-
-Først tilføjes nuget pakkerne
-
--  `Microsoft.Extensions.DependencyInjection` 
--  `Microsoft.Extensions.Configuration.Abstractions`
-
-
 
 `ApplicationServiceRegistration`
 
@@ -551,7 +639,6 @@ public static class ApplicationServiceRegistration
         services.AddScoped<IAuthorCommand, AuthorCommand>();
         services.AddScoped<IBookCommand, BookCommand>();
 
-
         return services;
     }
 }
@@ -560,15 +647,6 @@ public static class ApplicationServiceRegistration
 
 
 ### Infrastructure layer
-
-Først tilføjes nuget pakkerne
-
--  `Microsoft.Extensions.DependencyInjection` 
--  `Microsoft.Extensions.Configuration.Abstractions`
-
-
-
-
 
 `InfrastructureServiceRegistration`
 
@@ -597,6 +675,11 @@ public static class InfrastructureServiceRegistration
         services.AddScoped<IAuthorRepository, AuthorRepository>();
         services.AddScoped<IBookRepository, BookRepository>();
 
+        // Database
+        // https://github.com/dotnet/SqlClient/issues/2239
+        // https://learn.microsoft.com/en-us/ef/core/managing-schemas/migrations/projects?tabs=dotnet-core-cli
+        // Add-Migration InitialMigration -Context OrmContext -Project BlazorOnionDemo.Infrastructure
+        // Update-Database -Context OrmContext -Project BlazorOnionDemo.Infrastructure
         services.AddDbContext<OrmContext>(options =>
         {
             options.UseSqlServer(configuration.GetConnectionString("DbConnection"));
@@ -623,7 +706,8 @@ Bemærk at `BlazorOnionDemo.WebUi.csproj` indeholder `ProjectReference` til de �
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="9.0.10" />
+	  <PackageReference Include="Microsoft.AspNetCore.Components.QuickGrid.EntityFrameworkAdapter" Version="9.0.10" />
+	  <PackageReference Include="Microsoft.EntityFrameworkCore" Version="9.0.10" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="9.0.10" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="9.0.10">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
@@ -639,6 +723,7 @@ Bemærk at `BlazorOnionDemo.WebUi.csproj` indeholder `ProjectReference` til de �
   </PropertyGroup>
 
 </Project>
+
 
 ```
 
@@ -657,7 +742,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
-// OBS !!! Blazor frontend til Domain Centric Backend - IoC setup
+// Blazor frontend til Domain Centric Backend - IoC setup
 builder.Services.AddApplicationServices(); // from BlazorOnionDemo.Application
 builder.Services.AddInfrastructureServices(builder.Configuration); // from BlazorOnionDemo.Infrastructure
 
@@ -667,10 +752,11 @@ var app = builder.Build();
 // Configure the HTTP request pipeline.
 if (!app.Environment.IsDevelopment())
 {
-    app.UseExceptionHandler("/Error", createScopeForErrors: true);
+    app.UseExceptionHandler("/Error", true);
     // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
     app.UseHsts();
 }
+
 app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
 app.UseHttpsRedirection();
 
@@ -734,9 +820,361 @@ Update-Database -Context OrmContext -Project BlazorOnionDemo.Infrastructure
 
 ## Blazor kobles sammen med en "Onion Core"
 
+Vi er nu klar til at lave Blazor pages der anvender vores "Core" som forretningslogik.
+
+Inspiration til koden er hentet [her](https://github.com/dotnet/blazor-samples/tree/main/9.0/BlazorWebAppMovies)
+
+Under `Pages` oprettes folderen `AuthorPages`
+
+### Index Page
+
+`Index.razor`
+
+```c#
+@page "/authors"
+@using BlazorOnionDemo.Application.Contracts.Queries
+@using Microsoft.AspNetCore.Components.QuickGrid
+
+@inject IAuthorQuery AuthorQuery
+
+<PageTitle>Index</PageTitle>
+
+<h1>Index</h1>
+
+<p>
+    <a href="authors/create">Create New</a>
+</p>
+
+<div>
+    <QuickGrid Class="table" Items="Authors" Pagination="pagination">
+        <PropertyColumn Property="author => author.Id" Sortable="true"/>
+        <PropertyColumn Property="author => author.Name" Sortable="true"/>
+        <PropertyColumn Property="author => author.Books.Count" Title="Book count"/>
+
+        <TemplateColumn Context="author">
+            <a href="@($"authors/details?id={author.Id}")">Details</a>
+        </TemplateColumn>
+    </QuickGrid>
+</div>
+
+<Paginator State="pagination"/>
+
+@code {
+
+    private readonly PaginationState pagination = new() { ItemsPerPage = 5 };
+    private IQueryable<AuthorDto> Authors; // = default!; /* => context.Movie.Where(m => m.Title!.Contains(titleFilter)); */
+
+    protected override async Task OnInitializedAsync()
+    {
+        Authors = (await AuthorQuery.GetAllAsync()).AsQueryable();
+    }
+
+}
+```
 
 
 
+`Index.razor.css`
+
+```css
+::deep tr {
+    height: 3em;
+}
+
+    ::deep tr > td {
+        vertical-align: middle;
+    }
+
+```
+
+
+
+### Create Page
+
+`Create.razor`
+
+```c#
+@page "/authors/create"
+@using BlazorOnionDemo.Application.Contracts.Commands
+@inject IAuthorCommand Command
+@inject NavigationManager NavigationManager
+
+<PageTitle>Create</PageTitle>
+
+<h1>Create</h1>
+
+<h2>Author</h2>
+<hr/>
+<div class="row">
+    <div class="col-md-4">
+        <EditForm method="post" Model="Author" OnValidSubmit="AddAuthor" FormName="create" Enhance>
+            <DataAnnotationsValidator/>
+            <ValidationSummary class="text-danger" role="alert"/>
+            <div class="mb-3">
+                <label for="title" class="form-label">Name:</label>
+                <InputText id="title" @bind-Value="Author.Name" class="form-control"/>
+                <ValidationMessage For="() => Author.Name" class="text-danger"/>
+            </div>
+            <button type="submit" class="btn btn-primary">Create</button>
+        </EditForm>
+    </div>
+</div>
+
+<div>
+    <a href="/authors">Back to List</a>
+</div>
+
+@code {
+    [SupplyParameterFromForm] private AuthorCreateCommandDto Author { get; set; } = new();
+
+    private async Task AddAuthor()
+    {
+        await Command.CreateAsync(Author);
+        NavigationManager.NavigateTo("/authors");
+    }
+
+}
+```
+
+
+
+### Details Page
+
+`Details.razor`
+
+```c#
+@page "/authors/details"
+@using BlazorOnionDemo.Application.Contracts.Queries
+@using Microsoft.AspNetCore.Components.QuickGrid
+
+@inject IAuthorQuery AuthorQuery
+@inject NavigationManager NavigationManager
+
+<PageTitle>Details</PageTitle>
+
+<h1>Details</h1>
+
+<div>
+    <h2>Author</h2>
+    <hr/>
+    @if (author is null)
+    {
+        <p>
+            <em>Loading...</em>
+        </p>
+    }
+    else
+    {
+        <dl class="row">
+            <dt class="col-sm-2">Id</dt>
+            <dd class="col-sm-10">@author.Id</dd>
+            <dt class="col-sm-2">Name</dt>
+            <dd class="col-sm-10">@author.Name</dd>
+        </dl>
+        <div>
+            <a href="@($"/authors/addBook?id={author.Id}")">Add book</a> |
+            <a href="@("/authors")">Back to List</a>
+        </div>
+    }
+
+    <h3>Books</h3>
+
+    <div>
+        <QuickGrid Class="table" Items="Books" Pagination="pagination">
+            <PropertyColumn Property="book => book.Id" Sortable="true"/>
+            <PropertyColumn Property="book => book.Title" Sortable="true"/>
+            <PropertyColumn Property="book => book.Description" Title="Book count"/>
+        </QuickGrid>
+    </div>
+</div>
+
+<Paginator State="pagination"/>
+
+@code {
+    private AuthorDto? author;
+    private readonly PaginationState pagination = new() { ItemsPerPage = 5 };
+    private IQueryable<AuthorBookDto> Books => author?.Books.AsQueryable() ?? Enumerable.Empty<AuthorBookDto>().AsQueryable();
+
+    [SupplyParameterFromQuery] private int Id { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        author = await AuthorQuery.GetByIdAsync(Id);
+
+        if (author is null)
+        {
+            NavigationManager.NavigateTo("notfound");
+        }
+    }
+
+}
+```
+
+
+
+`Details.razor.css`
+
+```css
+::deep tr {
+    height: 3em;
+}
+
+    ::deep tr > td {
+        vertical-align: middle;
+    }
+
+```
+
+
+
+### Page AddBook
+
+`AddBook.razor`
+
+```c#
+@page "/authors/addBook"
+@using BlazorOnionDemo.Application.Contracts.Commands
+@inject IAuthorCommand Command
+@inject NavigationManager NavigationManager
+
+<PageTitle>Add book</PageTitle>
+
+<h1>Add book</h1>
+
+<h2>Book</h2>
+<hr/>
+
+<div class="row">
+    <div class="col-md-4">
+        <EditForm method="post" Model="Book" OnValidSubmit="Add" FormName="create" Enhance>
+            <DataAnnotationsValidator/>
+            <ValidationSummary class="text-danger" role="alert"/>
+            <div class="mb-3">
+                <label for="title" class="form-label">Title:</label>
+                <InputText id="title" @bind-Value="Book.Title" class="form-control"/>
+                <ValidationMessage For="() => Book.Title" class="text-danger"/>
+            </div>
+            <div class="mb-3">
+                <label for="title" class="form-label">Description:</label>
+                <InputText id="title" @bind-Value="Book.Description" class="form-control"/>
+                <ValidationMessage For="() => Book.Description" class="text-danger"/>
+            </div>
+            <button type="submit" class="btn btn-primary">Create</button>
+        </EditForm>
+    </div>
+</div>
+
+<div>
+    <a href="@($"authors/details?id={Id}")">Back to List</a>
+</div>
+
+@code {
+    [SupplyParameterFromForm] private BookCreateCommandDto Book { get; set; } = new();
+
+    [SupplyParameterFromQuery] private int Id { get; set; }
+
+    private async Task Add()
+    {
+        var command = new AddBookToAuthorCommandDto { AuthorId = Id, Book = Book };
+        await Command.AddBookToAuthorAsync(command);
+        NavigationManager.NavigateTo($"authors/details?id={Id}");
+    }
+
+}
+```
+
+
+
+### Layout NavMenu.razor
+
+I folderen `Layout` tilrettes `NavMenu.razor`
+
+```
+<div class="top-row ps-3 navbar navbar-dark">
+    <div class="container-fluid">
+        <a class="navbar-brand" href="">BlazorOnionDemo.WebUi</a>
+    </div>
+</div>
+
+<input type="checkbox" title="Navigation menu" class="navbar-toggler" />
+
+<div class="nav-scrollable" onclick="document.querySelector('.navbar-toggler').click()">
+    <nav class="nav flex-column">
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
+                <span class="bi bi-house-door-fill-nav-menu" aria-hidden="true"></span> Home
+            </NavLink>
+        </div>
+
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="counter">
+                <span class="bi bi-plus-square-fill-nav-menu" aria-hidden="true"></span> Counter
+            </NavLink>
+        </div>
+
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="weather">
+                <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Weather
+            </NavLink>
+        </div>
+        
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="authors">
+                <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Authors
+            </NavLink>
+        </div>
+
+    </nav>
+</div>
+
+
+```
+
+
+
+---------------------------
+
+# Systemtest - der er "hul" fra Blazor til database
+
+### I `SQL Server Management Studio` 
+
+Start med at kontrollerer at der er oprettet en database. Dette gøres ved at anvende `SQL Server Management Studio` til at undersøge om der er oprettet en database. Hvis migration og oprettelse af database er gået godt, skal databasen `BlazorOnionDemoDb` være synlig i `SQL Server Management Studio`.
+
+
+
+### I `Visual Studio`
+
+I `Visual Studio` skal `BlazorOnionDemo.WebUi` være "Startup Projekt". Herefter startes applikationen og der åbnes en Brower med "Hello World" siden.
+
+Naviger til  Authors og vælg "Create New". 
+
+Opret en Author ved at udfylde "Name" og vælge "Create".
+
+Applikationen vender nu tilbage til Index siden, og den nye "Author" vises i listen.
+
+Vælg Details
+
+Vælg "Add book"
+
+Udfyld "Title" og "Description" og vælg "Create"
+
+Applikationen vender nu tilbage til Details siden, og den nye "Book" vises i listen.
+
+Vend tilbage til Index siden
+
+Bemærk at Book Count nu er "1".
+
+
+
+### I `SQL Server Management Studio` 
+
+Tjek at der er data i tabellerne `Authors` og `Books`
+
+
+
+
+
+------------------------------
 
 # Bilag
 
@@ -744,7 +1182,7 @@ Update-Database -Context OrmContext -Project BlazorOnionDemo.Infrastructure
 
 ## Bilag 1 - Script til projektoprettelse
 
-KbrOnionTemplate-Core-latest.bat
+`KbrOnionTemplate-Core-latest.bat`
 
 ```bat
 @echo off
@@ -784,10 +1222,18 @@ dotnet sln %app%.sln add %app%.Infrastructure/%app%.Infrastructure.csproj
 dotnet add %app%.WebUi/%app%.WebUi.csproj package Microsoft.EntityFrameworkCore
 dotnet add %app%.WebUi/%app%.WebUi.csproj package Microsoft.EntityFrameworkCore.SqlServer
 dotnet add %app%.WebUi/%app%.WebUi.csproj package Microsoft.EntityFrameworkCore.Tools
+dotnet add %app%.WebUi/%app%.WebUi.csproj package Microsoft.EntityFrameworkCore.Design
+dotnet add %app%.WebUi/%app%.WebUi.csproj package Microsoft.VisualStudio.Web.CodeGeneration.Design
+dotnet add %app%.WebUi/%app%.WebUi.csproj package Microsoft.AspNetCore.Components.QuickGrid.EntityFrameworkAdapter
+
+dotnet add %app%.Application/%app%.Application.csproj package Microsoft.Extensions.DependencyInjection
+dotnet add %app%.Application/%app%.Application.csproj package Microsoft.Extensions.Configuration.Abstractions
 
 dotnet add %app%.Infrastructure/%app%.Infrastructure.csproj package Microsoft.EntityFrameworkCore
 dotnet add %app%.Infrastructure/%app%.Infrastructure.csproj package Microsoft.EntityFrameworkCore.SqlServer
 dotnet add %app%.Infrastructure/%app%.Infrastructure.csproj package Microsoft.EntityFrameworkCore.Tools
+dotnet add %app%.Infrastructure/%app%.Infrastructure.csproj package Microsoft.Extensions.DependencyInjection
+dotnet add %app%.Infrastructure/%app%.Infrastructure.csproj package Microsoft.Extensions.Configuration.Abstractions
 
 
 dotnet add %app%.Domain.Test/%app%.Domain.Test.csproj package Moq
